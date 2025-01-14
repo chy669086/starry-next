@@ -2,7 +2,10 @@
 name = "starry"
 version = "0.1.0"
 edition = "2021"
-authors = ["Azure-stars <Azure_stars@126.com>", "Yuekai Jia <equation618@gmail.com>"]
+authors = [
+    "Azure-stars <Azure_stars@126.com>",
+    "Yuekai Jia <equation618@gmail.com>",
+]
 homepage = "https://github.com/arceos-org/arceos"
 repository = "https://github.com/arceos-org/starry-next"
 
@@ -17,12 +20,22 @@ kernel-elf-parser = "0.1.0"
 num_enum = { version = "0.7", default-features = false }
 syscalls = { version = "0.6", default-features = false }
 
-axstd = { git = "https://github.com/arceos-org/arceos.git", branch = "monolithic", features = ["paging"] }
-axhal = { git = "https://github.com/arceos-org/arceos.git", branch = "monolithic", features = ["uspace"] }
+axstd = { git = "https://github.com/arceos-org/arceos.git", branch = "monolithic", features = [
+    "alloc", "paging", "multitask", "sched_cfs", "fs"
+] }
+axhal = { git = "https://github.com/arceos-org/arceos.git", branch = "monolithic", features = [
+    "uspace",
+] }
+axfs = { git = "https://github.com/arceos-org/arceos.git", branch = "monolithic" }
 axmm = { git = "https://github.com/arceos-org/arceos.git", branch = "monolithic" }
 axtask = { git = "https://github.com/arceos-org/arceos.git", branch = "monolithic" }
 axsync = { git = "https://github.com/arceos-org/arceos.git", branch = "monolithic" }
-axruntime = { git = "https://github.com/arceos-org/arceos.git", branch = "monolithic", features = ["multitask"] }
+axruntime = { git = "https://github.com/arceos-org/arceos.git", branch = "monolithic", features = [
+    "multitask",
+] }
+axns = { git = "https://github.com/arceos-org/arceos.git", branch = "monolithic", features = [
+    "thread-local"
+] }
 arceos_posix_api = { git = "https://github.com/arceos-org/arceos.git", branch = "monolithic" }
 
 [target.'cfg(target_arch = "x86_64")'.dependencies]

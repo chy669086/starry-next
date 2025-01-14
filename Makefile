@@ -1,7 +1,7 @@
 AX_ROOT ?= $(PWD)/.arceos
 AX_TESTCASE ?= nimbos
 ARCH ?= x86_64
-AX_TESTCASES_LIST=$(shell cat ./apps/$(AX_TESTCASE)/testcase_list | tr '\n' ',')
+AX_TESTCASES_LIST=$(shell cat ./testcase_list | tr '\n' ',')
 FEATURES ?= fp_simd
 RUSTDOCFLAGS := -Z unstable-options --enable-index-page -D rustdoc::broken_intra_doc_links -D missing-docs
 

@@ -33,14 +33,18 @@ dependencies = [
 name = "arceos_api"
 version = "0.1.0"
 dependencies = [
+ "axalloc",
  "axconfig",
+ "axdriver",
  "axerrno",
  "axfeat",
+ "axfs",
  "axhal",
  "axio",
  "axlog",
  "axruntime",
  "axsync",
+ "axtask",
 ]
 
 [[package]]
@@ -108,6 +112,53 @@ dependencies = [
 ]
 
 [[package]]
+name = "axdriver"
+version = "0.1.0"
+dependencies = [
+ "axalloc",
+ "axconfig",
+ "axdriver_base",
+ "axdriver_block",
+ "axdriver_pci",
+ "axdriver_virtio",
+ "axhal",
+ "cfg-if",
+ "log",
+]
+
+[[package]]
+name = "axdriver_base"
+version = "0.1.0"
+source = "git+https://github.com/arceos-org/axdriver_crates.git?tag=v0.1.0#78686a7e70c9203ba29e425929c393fbb7eca208"
+
+[[package]]
+name = "axdriver_block"
+version = "0.1.0"
+source = "git+https://github.com/arceos-org/axdriver_crates.git?tag=v0.1.0#78686a7e70c9203ba29e425929c393fbb7eca208"
+dependencies = [
+ "axdriver_base",
+ "log",
+]
+
+[[package]]
+name = "axdriver_pci"
+version = "0.1.0"
+source = "git+https://github.com/arceos-org/axdriver_crates.git?tag=v0.1.0#78686a7e70c9203ba29e425929c393fbb7eca208"
+dependencies = [
+ "virtio-drivers",
+]
+
+[[package]]
+name = "axdriver_virtio"
+version = "0.1.0"
+source = "git+https://github.com/arceos-org/axdriver_crates.git?tag=v0.1.0#78686a7e70c9203ba29e425929c393fbb7eca208"
+dependencies = [
+ "axdriver_base",
+ "axdriver_block",
+ "virtio-drivers",
+]
+
+[[package]]
 name = "axerrno"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -121,9 +172,66 @@ name = "axfeat"
 version = "0.1.0"
 dependencies = [
  "axalloc",
+ "axdriver",
+ "axfs",
  "axhal",
  "axlog",
  "axruntime",
+ "axsync",
+ "axtask",
+]
+
+[[package]]
+name = "axfs"
+version = "0.1.0"
+dependencies = [
+ "axdriver",
+ "axdriver_block",
+ "axerrno",
+ "axfs_devfs",
+ "axfs_ramfs",
+ "axfs_vfs",
+ "axio",
+ "axns",
+ "axsync",
+ "cap_access",
+ "cfg-if",
+ "fatfs",
+ "lazyinit",
+ "log",
+]
+
+[[package]]
+name = "axfs_devfs"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d62eff0490e10cd2c2a74be2979820f0293fa5ebe00ee8bfd87b88ac7dd7d235"
+dependencies = [
+ "axfs_vfs",
+ "log",
+ "spin",
+]
+
+[[package]]
+name = "axfs_ramfs"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db46c6dae25a123579d5fdcdcc502d0dc2a8af86646106004c8a9181433271b1"
+dependencies = [
+ "axfs_vfs",
+ "log",
+ "spin",
+]
+
+[[package]]
+name = "axfs_vfs"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2314ebe07a2fef7b1c1a7d15ab817941cd306ace651bb50024b5a8b3e8485359"
+dependencies = [
+ "axerrno",
+ "bitflags 2.6.0",
+ "log",
 ]
 
 [[package]]
@@ -195,11 +303,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "axns"
+version = "0.1.0"
+dependencies = [
+ "crate_interface",
+ "lazyinit",
+]
+
+[[package]]
 name = "axruntime"
 version = "0.1.0"
 dependencies = [
  "axalloc",
  "axconfig",
+ "axdriver",
+ "axfs",
  "axhal",
  "axlog",
  "axmm",
@@ -207,6 +325,8 @@ dependencies = [
  "chrono",
  "crate_interface",
  "ctor_bare",
+ "kernel_guard",
+ "percpu",
 ]
 
 [[package]]
@@ -315,6 +435,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1d084b0137aaa901caf9f1e8b21daa6aa24d41cd806e111335541eff9683bd6"
 
 [[package]]
+name = "byteorder"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
+
+[[package]]
+name = "cap_access"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c9b24894fa5f73bbf9c72196e7f495a1f81d6218a548280a09ada4a937157692"
+dependencies = [
+ "bitflags 2.6.0",
+]
+
+[[package]]
 name = "cexpr"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -414,6 +549,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "361a90feb7004eca4019fb28352a9465666b24f840f5c3cddf0ff13920590b89"
 
 [[package]]
+name = "enumn"
+version = "0.1.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2f9ed6b3789237c8a0c1c505af1c7eb2c560df6186f01b098c3a1064ea532f38"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.90",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -427,6 +573,15 @@ checksum = "33d852cb9b869c2a9b3df2f71a3074817f01e1844f839a144f5fcef059a4eb5d"
 dependencies = [
  "libc",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "fatfs"
+version = "0.4.0"
+source = "git+https://github.com/rafalh/rust-fatfs?rev=85f06e0#85f06e08edbd3368e1b0562f2fc1b6d178bf7b8a"
+dependencies = [
+ "bitflags 2.6.0",
+ "log",
 ]
 
 [[package]]
@@ -718,6 +873,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c7156fa6801337eb593af0c6d664b92de216c5e53e761e1eb6e119cff542d195"
 dependencies = [
  "cfg-if",
+ "kernel_guard",
  "percpu_macros",
  "spin",
  "x86",
@@ -926,8 +1082,10 @@ version = "0.1.0"
 dependencies = [
  "arceos_posix_api",
  "axerrno",
+ "axfs",
  "axhal",
  "axmm",
+ "axns",
  "axruntime",
  "axstd",
  "axsync",
@@ -1031,6 +1189,18 @@ name = "unicode-width"
 version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7dd6e30e90baa6f72411720665d41d89b9a3d039dc45b8faea1ddd07f617f6af"
+
+[[package]]
+name = "virtio-drivers"
+version = "0.7.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6a39747311dabb3d37807037ed1c3c38d39f99198d091b5b79ecd5c8d82f799"
+dependencies = [
+ "bitflags 2.6.0",
+ "enumn",
+ "log",
+ "zerocopy",
+]
 
 [[package]]
 name = "volatile"
@@ -1203,3 +1373,24 @@ name = "zero"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2fe21bcc34ca7fe6dd56cc2cb1261ea59d6b93620215aefb5ea6032265527784"
+
+[[package]]
+name = "zerocopy"
+version = "0.7.35"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b9b4fd18abc82b8136838da5d50bae7bdea537c574d8dc1a34ed098d6c166f0"
+dependencies = [
+ "byteorder",
+ "zerocopy-derive",
+]
+
+[[package]]
+name = "zerocopy-derive"
+version = "0.7.35"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa4f8080344d4671fb4e831a13ad1e68092748387dfc4f55e356242fae12ce3e"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.90",
+]
