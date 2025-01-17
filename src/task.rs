@@ -3,10 +3,12 @@ use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
+use arceos_posix_api::FD_TABLE;
 use axerrno::AxResult;
+use axfs::{CURRENT_DIR, CURRENT_DIR_PATH};
 use axhal::arch::{TrapFrame, UspaceContext};
-use axmm::AddrSpace;
-use axstd::os::arceos::api::task::ax_spawn;
+use axmm::{kernel_page_table_root, AddrSpace};
+use axns::{AxNamespace, AxNamespaceIf, AxResource};
 use axsync::Mutex;
 use axtask::{current, AxTaskRef, TaskExtRef, TaskInner};
 use core::ops::Sub;
@@ -30,6 +32,8 @@ pub struct TaskExt {
     pub uctx: UspaceContext,
     /// The virtual memory address space.
     pub aspace: Arc<Mutex<AddrSpace>>,
+    /// The resource namespace.
+    pub ns: AxNamespace,
 }
 
 impl TaskExt {
@@ -41,6 +45,7 @@ impl TaskExt {
             uctx,
             clear_child_tid: AtomicU64::new(0),
             aspace,
+            ns: AxNamespace::new_thread_local(),
         }
     }
 
@@ -74,7 +79,7 @@ impl TaskExt {
         let mut trap_frame =
             read_trap_frame_from_kstack(curr.kernel_stack_top().unwrap().as_usize());
 
-        let new_aspace = if clone_flags.contains(CloneFlags::CLONE_VM) {
+        let new_aspace = if !clone_flags.contains(CloneFlags::CLONE_VM) {
             let new_aspace = AddrSpace::from_exited_space(&self.aspace.lock())?;
             Arc::new(Mutex::new(new_aspace))
         } else {
@@ -97,6 +102,7 @@ impl TaskExt {
         let task_id = new_task.id().as_u64();
         let new_task_ext = TaskExt::new(task_id as usize, new_uctx, new_aspace);
 
+        new_task_ext.init_ns();
         new_task.init_task_ext(new_task_ext);
 
         let new_task_ref = axtask::spawn_task(new_task);
@@ -114,6 +120,49 @@ impl TaskExt {
     pub(crate) fn set_clear_child_tid(&self, clear_child_tid: u64) {
         self.clear_child_tid
             .store(clear_child_tid, core::sync::atomic::Ordering::Relaxed);
+    }
+
+    pub(crate) fn init_ns(&self) {
+        unsafe {
+            FD_TABLE.init_new_from(&self.ns);
+            CURRENT_DIR.init_new_from(&self.ns);
+            CURRENT_DIR_PATH.init_new_from(&self.ns);
+        }
+        FD_TABLE
+            .deref_from(&self.ns)
+            .init_new(FD_TABLE.copy_inner());
+        CURRENT_DIR
+            .deref_from(&self.ns)
+            .init_new(CURRENT_DIR.copy_inner());
+        CURRENT_DIR_PATH
+            .deref_from(&self.ns)
+            .init_new(CURRENT_DIR_PATH.copy_inner());
+    }
+}
+
+impl Drop for TaskExt {
+    fn drop(&mut self) {
+        // TODO: 将所有子进程的父进程设置为1
+        unsafe {
+            FD_TABLE.deref_from(&self.ns);
+            CURRENT_DIR.deref_from(&self.ns);
+            CURRENT_DIR_PATH.deref_from(&self.ns);
+        }
+    }
+}
+
+struct AxNamespaceImpl;
+
+#[crate_interface::impl_interface]
+impl AxNamespaceIf for AxNamespaceImpl {
+    #[inline(never)]
+    fn current_namespace_base() -> *mut u8 {
+        let current = axtask::current();
+        // Safety: We only check whether the task extended data is null and do not access it.
+        if unsafe { current.task_ext_ptr() }.is_null() {
+            return axns::AxNamespace::global().base();
+        }
+        current.task_ext().ns.base()
     }
 }
 
@@ -138,6 +187,8 @@ pub fn spawn_user_task(aspace: Arc<Mutex<AddrSpace>>, uctx: UspaceContext) -> Ax
     task.ctx_mut()
         .set_page_table_root(aspace.lock().page_table_root());
     task.init_task_ext(TaskExt::new(task.id().as_u64() as usize, uctx, aspace));
+    task.task_ext().init_ns();
+
     axtask::spawn_task(task)
 }
 
@@ -168,12 +219,9 @@ pub(crate) fn wait_pid(pid: i32, exit_code_ptr: *mut i32, _option: u32) -> Resul
     } else if state == axtask::TaskState::Exited {
         let exit_code = child.exit_code();
         if !exit_code_ptr.is_null() {
-            curr_task
-                .task_ext()
-                .aspace
-                .lock()
-                .write((exit_code_ptr as usize).into(), &exit_code.to_le_bytes())
-                .unwrap();
+            unsafe {
+                *exit_code_ptr = exit_code;
+            }
         }
 
         curr_task.task_ext().children.lock().remove(loc);
@@ -201,12 +249,9 @@ fn wait_pid_nagative(pid: i32, exit_code_ptr: *mut i32, _option: u32) -> Result<
             proc_status = WaitStatus::Exited;
             let exit_code = task.exit_code();
             if !exit_code_ptr.is_null() {
-                curr_task
-                    .task_ext()
-                    .aspace
-                    .lock()
-                    .write((exit_code_ptr as usize).into(), &exit_code.to_le_bytes())
-                    .unwrap();
+                unsafe {
+                    *exit_code_ptr = exit_code;
+                }
             }
 
             child_id = id;

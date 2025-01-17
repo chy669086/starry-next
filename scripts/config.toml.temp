@@ -3,6 +3,8 @@ axstd = { path = "%AX_ROOT%/ulib/axstd" }
 arceos_posix_api = { path = "%AX_ROOT%/api/arceos_posix_api" }
 axhal = { path = "%AX_ROOT%/modules/axhal" }
 axmm = { path = "%AX_ROOT%/modules/axmm" }
+axfs = { path = "%AX_ROOT%/modules/axfs" }
+axns = { path = "%AX_ROOT%/modules/axns" }
 axtask = { path = "%AX_ROOT%/modules/axtask" }
 axsync = { path = "%AX_ROOT%/modules/axsync" }
 axruntime = { path = "%AX_ROOT%/modules/axruntime" }

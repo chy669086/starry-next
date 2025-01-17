@@ -51,6 +51,7 @@ fn handle_syscall(tf: &TrapFrame, syscall_num: usize) -> isize {
             tf.arg5() as _,
         ) as _,
         Sysno::ioctl => sys_ioctl(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _) as _,
+        Sysno::getppid => sys_getppid() as isize,
         Sysno::writev => sys_writev(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),
         Sysno::sched_yield => sys_sched_yield() as isize,
         Sysno::nanosleep => sys_nanosleep(tf.arg0() as _, tf.arg1() as _) as _,
@@ -68,9 +69,24 @@ fn handle_syscall(tf: &TrapFrame, syscall_num: usize) -> isize {
             tf.arg3() as _,
             tf.arg4() as _,
         ),
+        Sysno::dup => sys_dup(tf.arg0() as _) as _,
+        Sysno::dup3 => sys_dup3(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _) as _,
+        Sysno::fstat => sys_fstat(tf.arg0() as _, tf.arg1() as _) as _,
         Sysno::wait4 => sys_wait4(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _) as _,
         Sysno::gettimeofday => sys_get_time_of_day(tf.arg0() as _) as _,
         Sysno::execve => sys_execve(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _) as _,
+        Sysno::getcwd => sys_getcwd(tf.arg0() as _, tf.arg1() as _) as _,
+        Sysno::close => sys_close(tf.arg0() as _) as _,
+        Sysno::chdir => sys_chdir(tf.arg0() as _) as _,
+        Sysno::pipe2 => sys_pipe2(tf.arg0() as _, tf.arg1() as _) as _,
+        Sysno::mkdirat => sys_mkdirat(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _) as _,
+        Sysno::getdents64 => sys_getdents64(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _) as _,
+        Sysno::openat => sys_openat(
+            tf.arg0() as _,
+            tf.arg1() as _,
+            tf.arg2() as _,
+            tf.arg3() as _,
+        ) as _,
         _ => {
             warn!("Unimplemented syscall: {}", syscall_num);
             axtask::exit(LinuxError::ENOSYS as _)

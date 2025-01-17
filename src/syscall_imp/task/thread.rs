@@ -29,6 +29,11 @@ pub(crate) fn sys_getpid() -> i32 {
     api::sys_getpid()
 }
 
+pub(crate) fn sys_getppid() -> i32 {
+    let curr = current();
+    curr.task_ext().ppid as i32
+}
+
 pub(crate) fn sys_exit(status: i32) -> ! {
     let curr = current();
     let clear_child_tid = curr.task_ext().clear_child_tid() as *mut i32;
