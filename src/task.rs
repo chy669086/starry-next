@@ -79,11 +79,11 @@ impl TaskExt {
         let mut trap_frame =
             read_trap_frame_from_kstack(curr.kernel_stack_top().unwrap().as_usize());
 
-        let new_aspace = if !clone_flags.contains(CloneFlags::CLONE_VM) {
+        let new_aspace = if clone_flags.contains(CloneFlags::CLONE_VM) {
+            self.aspace.clone()
+        } else {
             let new_aspace = AddrSpace::from_exited_space(&self.aspace.lock())?;
             Arc::new(Mutex::new(new_aspace))
-        } else {
-            self.aspace.clone()
         };
 
         new_task

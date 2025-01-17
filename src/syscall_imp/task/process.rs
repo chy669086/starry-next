@@ -1,15 +1,21 @@
+use alloc::boxed::Box;
 use crate::flag::WaitStatus;
 use crate::mm::{load_elf, load_user_app};
 use crate::task::{wait_pid, TaskExt};
 use crate::{mm, syscall_body, task};
 use alloc::string::String;
 use alloc::sync::Arc;
+use alloc::vec;
+use alloc::vec::Vec;
 use arceos_posix_api::char_ptr_to_str;
 use axhal::arch::UspaceContext;
-use axmm::kernel_page_table_root;
+use axmm::{kernel_page_table_root, AddrSpace};
 use axsync::Mutex;
 use axtask::{current, yield_now, TaskExtMut, TaskExtRef};
 use core::ffi::c_char;
+use axerrno::{AxError, AxResult};
+use memory_addr::VirtAddrRange;
+use axhal::paging::MappingFlags;
 
 pub(crate) fn sys_clone(
     flags: usize,
@@ -72,15 +78,23 @@ pub(crate) fn sys_execve(
     };
 
     let path = String::from(path);
+    let argv = unsafe { copy_from_ptr(argv) };
+    let envp = unsafe { copy_from_ptr(envp) };
 
     aspace.clear();
 
     let (entry_vaddr, ustack_top) = load_elf(&path, &mut aspace).unwrap();
 
-    drop(aspace);
 
     let task_ext = unsafe { &mut *(curr.task_ext_ptr() as *mut TaskExt) };
-    task_ext.uctx = UspaceContext::new(entry_vaddr.as_usize(), ustack_top, 0);
+    task_ext.uctx = UspaceContext::new(entry_vaddr.as_usize(), ustack_top, argv.len());
+
+    let argv_ptr = alloc_user_argv(argv).unwrap();
+    let envp_ptr = alloc_user_argv(envp).unwrap();
+
+    task_ext.uctx.set_arg(argv_ptr, envp_ptr);
+
+    drop(aspace);
 
     let kstack_top = curr.kernel_stack_top().unwrap();
     info!(
@@ -99,4 +113,40 @@ pub(crate) fn sys_execve(
     unsafe {
         task_ext.uctx.enter_uspace(kstack_top);
     }
+}
+
+fn alloc_user_argv(argv: Vec<String>) -> AxResult<usize> {
+    let argv = Box::leak(argv.into_boxed_slice());
+
+    let argv_ptr = argv
+        .iter()
+        .map(|s| s.as_ptr() as usize)
+        .chain(vec![0].into_iter())
+        .collect::<Vec<_>>();
+
+    let argv_ptr = argv_ptr.into_boxed_slice();
+
+    let ptr = Box::leak(argv_ptr);
+
+    Ok(ptr.as_ptr() as usize)
+}
+
+unsafe fn copy_from_ptr(ptr: *const *const c_char) -> Vec<String> {
+    let mut res = Vec::new();
+    let mut i = 0;
+    loop {
+        let p = unsafe { *ptr.add(i) };
+        if p.is_null() {
+            break;
+        }
+        let Ok(s) = char_ptr_to_str(p) else {
+            return Vec::new();
+        };
+
+        let mut str = String::from(s);
+        str.push('\0');
+        res.push(str);
+        i += 1;
+    }
+    res
 }
