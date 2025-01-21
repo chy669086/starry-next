@@ -360,6 +360,7 @@ dependencies = [
  "kernel_guard",
  "kspin",
  "lazyinit",
+ "linkme",
  "log",
  "memory_addr",
  "percpu",

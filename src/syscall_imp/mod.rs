@@ -9,7 +9,7 @@ use axhal::{
     trap::{register_trap_handler, SYSCALL},
 };
 use syscalls::Sysno;
-
+use axtask::current;
 use self::fs::*;
 use self::mm::*;
 use self::task::*;
@@ -42,6 +42,7 @@ fn handle_syscall(tf: &TrapFrame, syscall_num: usize) -> isize {
     match Sysno::from(syscall_num as u32) {
         Sysno::read => sys_read(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),
         Sysno::write => sys_write(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),
+        Sysno::brk => sys_brk(tf.arg0() as _) as _,
         Sysno::mmap => sys_mmap(
             tf.arg0() as _,
             tf.arg1() as _,
@@ -50,6 +51,7 @@ fn handle_syscall(tf: &TrapFrame, syscall_num: usize) -> isize {
             tf.arg4() as _,
             tf.arg5() as _,
         ) as _,
+        Sysno::munmap => sys_munmap(tf.arg0() as _, tf.arg1() as _) as _,
         Sysno::ioctl => sys_ioctl(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _) as _,
         Sysno::getppid => sys_getppid() as isize,
         Sysno::writev => sys_writev(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),
@@ -81,6 +83,7 @@ fn handle_syscall(tf: &TrapFrame, syscall_num: usize) -> isize {
         Sysno::pipe2 => sys_pipe2(tf.arg0() as _, tf.arg1() as _) as _,
         Sysno::mkdirat => sys_mkdirat(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _) as _,
         Sysno::getdents64 => sys_getdents64(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _) as _,
+        Sysno::times => sys_times(tf.arg0() as _) as _,
         Sysno::openat => sys_openat(
             tf.arg0() as _,
             tf.arg1() as _,

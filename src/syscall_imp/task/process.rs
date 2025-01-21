@@ -1,21 +1,21 @@
-use alloc::boxed::Box;
 use crate::flag::WaitStatus;
 use crate::mm::{load_elf, load_user_app};
 use crate::task::{wait_pid, TaskExt};
-use crate::{mm, syscall_body, task};
+use crate::{mm, task, syscall_body};
+use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
 use arceos_posix_api::char_ptr_to_str;
+use axerrno::{AxError, AxResult};
 use axhal::arch::UspaceContext;
+use axhal::paging::MappingFlags;
 use axmm::{kernel_page_table_root, AddrSpace};
 use axsync::Mutex;
 use axtask::{current, yield_now, TaskExtMut, TaskExtRef};
 use core::ffi::c_char;
-use axerrno::{AxError, AxResult};
 use memory_addr::VirtAddrRange;
-use axhal::paging::MappingFlags;
 
 pub(crate) fn sys_clone(
     flags: usize,
@@ -84,7 +84,6 @@ pub(crate) fn sys_execve(
     aspace.clear();
 
     let (entry_vaddr, ustack_top) = load_elf(&path, &mut aspace).unwrap();
-
 
     let task_ext = unsafe { &mut *(curr.task_ext_ptr() as *mut TaskExt) };
     task_ext.uctx = UspaceContext::new(entry_vaddr.as_usize(), ustack_top, argv.len());

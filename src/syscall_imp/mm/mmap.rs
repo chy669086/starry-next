@@ -1,9 +1,10 @@
+use crate::syscall_body;
+use crate::syscall_imp::fs::sys_read;
 use axerrno::LinuxError;
+use axhal::arch::read_page_table_root;
 use axhal::paging::MappingFlags;
 use axtask::{current, TaskExtRef};
-use memory_addr::{VirtAddr, VirtAddrRange};
-
-use crate::syscall_body;
+use memory_addr::{MemoryAddr, VirtAddr, VirtAddrRange};
 
 bitflags::bitflags! {
     /// permissions for sys_mmap
@@ -62,9 +63,13 @@ pub(crate) fn sys_mmap(
     length: usize,
     prot: i32,
     flags: i32,
-    _fd: i32,
-    _offset: isize,
+    fd: i32,
+    offset: isize,
 ) -> usize {
+    debug!(
+        "sys_mmap <= {:#x} {} {:#x} {} {} {}",
+        addr as usize, length, prot, flags, fd, offset
+    );
     syscall_body!(sys_mmap, {
         let curr = current();
         let curr_ext = curr.task_ext();
@@ -91,8 +96,48 @@ pub(crate) fn sys_mmap(
                 .ok_or(LinuxError::ENOMEM)?
         };
 
-        aspace.map_alloc(start_addr, length, permission_flags.into(), false)?;
+        let populate = if fd == -1 {
+            false
+        } else {
+            !map_flags.contains(MmapFlags::MAP_ANONYMOUS)
+        };
+
+        let end_addr = (start_addr + length).align_up_4k();
+
+        aspace.map_alloc(
+            start_addr.align_down_4k(),
+            end_addr
+                .sub(start_addr.align_down_4k().as_usize())
+                .as_usize(),
+            permission_flags.into(),
+            true,
+        )?;
+
+        drop(aspace);
+
+        if populate {
+            let file_inner = arceos_posix_api::read_file(fd, offset as usize, length)?;
+
+            let ptr = start_addr.as_mut_ptr();
+
+            unsafe {
+                core::ptr::copy_nonoverlapping(file_inner.as_ptr(), ptr, length);
+            }
+        }
 
         Ok(start_addr.as_usize())
+    })
+}
+
+pub(crate) fn sys_munmap(addr: *mut usize, mut length: usize) -> i32 {
+    syscall_body!(sys_munmap, {
+        let curr = current();
+        let curr_ext = curr.task_ext();
+        let mut aspace = curr_ext.aspace.lock();
+        length = memory_addr::align_up_4k(length);
+        let start_addr = VirtAddr::from(addr as usize);
+        aspace.unmap(start_addr, length)?;
+        axhal::arch::flush_tlb(None);
+        Ok(0)
     })
 }

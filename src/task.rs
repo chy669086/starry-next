@@ -14,6 +14,7 @@ use axtask::{current, AxTaskRef, TaskExtRef, TaskInner};
 use core::ops::Sub;
 use core::sync::atomic::AtomicU64;
 
+
 /// Task extended data for the monolithic kernel.
 pub struct TaskExt {
     /// The parent process ID.
@@ -224,7 +225,8 @@ pub(crate) fn wait_pid(pid: i32, exit_code_ptr: *mut i32, _option: u32) -> Resul
             }
         }
 
-        curr_task.task_ext().children.lock().remove(loc);
+        let child_task = curr_task.task_ext().children.lock().remove(loc);
+        curr_task.add_child_time(&child_task);
 
         return Ok(child.id().as_u64());
     }
@@ -261,6 +263,7 @@ fn wait_pid_nagative(pid: i32, exit_code_ptr: *mut i32, _option: u32) -> Result<
 
     if proc_status == WaitStatus::Exited {
         let child = curr_task.task_ext().children.lock().remove(child_id);
+        curr_task.add_child_time(&child);
         return Ok(child.id().as_u64());
     }
 
