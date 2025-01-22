@@ -1,7 +1,6 @@
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::c_void;
 
 use arceos_posix_api as api;
-use arceos_posix_api::ctypes::{mode_t, size_t};
 
 pub(crate) fn sys_read(fd: i32, buf: *mut c_void, count: usize) -> isize {
     api::sys_read(fd, buf, count)

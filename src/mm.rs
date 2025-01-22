@@ -9,7 +9,6 @@ use axmm::AddrSpace;
 use axtask::TaskExtRef;
 use memory_addr::VirtAddr;
 
-use crate::loader::ELFInfo;
 use crate::{config, loader};
 
 /// Load a user app.

@@ -1,5 +1,3 @@
-use core::ffi::CStr;
-
 #[derive(Debug, Clone, Copy, Default)]
 #[repr(C)]
 pub struct DirEnt {

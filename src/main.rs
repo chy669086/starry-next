@@ -21,7 +21,6 @@ use alloc::sync::Arc;
 
 use axhal::arch::UspaceContext;
 use axsync::Mutex;
-use axtask::{current, TaskExtRef};
 
 #[no_mangle]
 fn main() {

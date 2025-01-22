@@ -1,7 +1,5 @@
 use crate::syscall_body;
-use crate::syscall_imp::fs::sys_read;
 use axerrno::LinuxError;
-use axhal::arch::read_page_table_root;
 use axhal::paging::MappingFlags;
 use axtask::{current, TaskExtRef};
 use memory_addr::{MemoryAddr, VirtAddr, VirtAddrRange};
@@ -114,6 +112,10 @@ pub(crate) fn sys_mmap(
         )?;
 
         drop(aspace);
+
+        if offset < 0 {
+            return Err(LinuxError::EINVAL);
+        }
 
         if populate {
             let file_inner = arceos_posix_api::read_file(fd, offset as usize, length)?;

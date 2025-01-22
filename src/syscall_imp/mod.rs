@@ -1,19 +1,20 @@
 mod fs;
 mod mm;
+mod sys;
 mod task;
 mod time;
 
+use self::fs::*;
+use self::mm::*;
+use self::sys::*;
+use self::task::*;
+use self::time::*;
 use axerrno::LinuxError;
 use axhal::{
     arch::TrapFrame,
     trap::{register_trap_handler, SYSCALL},
 };
 use syscalls::Sysno;
-use axtask::current;
-use self::fs::*;
-use self::mm::*;
-use self::task::*;
-use self::time::*;
 
 /// Macro to generate syscall body
 ///
@@ -55,6 +56,13 @@ fn handle_syscall(tf: &TrapFrame, syscall_num: usize) -> isize {
         Sysno::ioctl => sys_ioctl(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _) as _,
         Sysno::getppid => sys_getppid() as isize,
         Sysno::writev => sys_writev(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),
+        Sysno::linkat => sys_linkat(
+            tf.arg0() as _,
+            tf.arg1() as _,
+            tf.arg2() as _,
+            tf.arg3() as _,
+            tf.arg4() as _,
+        ) as _,
         Sysno::sched_yield => sys_sched_yield() as isize,
         Sysno::nanosleep => sys_nanosleep(tf.arg0() as _, tf.arg1() as _) as _,
         Sysno::getpid => sys_getpid() as isize,
@@ -84,12 +92,22 @@ fn handle_syscall(tf: &TrapFrame, syscall_num: usize) -> isize {
         Sysno::mkdirat => sys_mkdirat(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _) as _,
         Sysno::getdents64 => sys_getdents64(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _) as _,
         Sysno::times => sys_times(tf.arg0() as _) as _,
+        Sysno::unlinkat => sys_unlinkat(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _) as _,
         Sysno::openat => sys_openat(
             tf.arg0() as _,
             tf.arg1() as _,
             tf.arg2() as _,
             tf.arg3() as _,
         ) as _,
+        Sysno::uname => sys_uname(tf.arg0() as _) as _,
+        Sysno::mount => sys_mount(
+            tf.arg0() as _,
+            tf.arg1() as _,
+            tf.arg2() as _,
+            tf.arg3() as _,
+            tf.arg4() as _,
+        ) as _,
+        Sysno::umount2 => sys_umount(tf.arg0() as _) as _,
         _ => {
             warn!("Unimplemented syscall: {}", syscall_num);
             axtask::exit(LinuxError::ENOSYS as _)

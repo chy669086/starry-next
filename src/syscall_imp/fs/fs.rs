@@ -18,7 +18,7 @@ pub(crate) fn sys_dup2(old_fd: i32, new_fd: i32) -> i32 {
     api::sys_dup2(old_fd, new_fd)
 }
 
-pub(crate) fn sys_dup3(old_fd: i32, new_fd: i32, flags: i32) -> i32 {
+pub(crate) fn sys_dup3(old_fd: i32, new_fd: i32, _flags: i32) -> i32 {
     // api::sys_dup3(old_fd, new_fd, flags)
     sys_dup2(old_fd, new_fd)
 }

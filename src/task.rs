@@ -1,19 +1,17 @@
 use crate::flag::{CloneFlags, WaitStatus};
 use alloc::string::String;
 use alloc::sync::Arc;
-use alloc::vec;
 use alloc::vec::Vec;
 use arceos_posix_api::FD_TABLE;
 use axerrno::AxResult;
 use axfs::{CURRENT_DIR, CURRENT_DIR_PATH};
 use axhal::arch::{TrapFrame, UspaceContext};
-use axmm::{kernel_page_table_root, AddrSpace};
-use axns::{AxNamespace, AxNamespaceIf, AxResource};
+use axmm::AddrSpace;
+use axns::{AxNamespace, AxNamespaceIf};
 use axsync::Mutex;
 use axtask::{current, AxTaskRef, TaskExtRef, TaskInner};
-use core::ops::Sub;
+use core::cell::UnsafeCell;
 use core::sync::atomic::AtomicU64;
-
 
 /// Task extended data for the monolithic kernel.
 pub struct TaskExt {
@@ -35,7 +33,11 @@ pub struct TaskExt {
     pub aspace: Arc<Mutex<AddrSpace>>,
     /// The resource namespace.
     pub ns: AxNamespace,
+    pub brk_bottom: usize,
+    pub brk: UnsafeCell<usize>,
 }
+
+const BRK_BOTTOM: usize = 0x40000000;
 
 impl TaskExt {
     pub fn new(proc_id: usize, uctx: UspaceContext, aspace: Arc<Mutex<AddrSpace>>) -> Self {
@@ -47,6 +49,8 @@ impl TaskExt {
             clear_child_tid: AtomicU64::new(0),
             aspace,
             ns: AxNamespace::new_thread_local(),
+            brk_bottom: BRK_BOTTOM,
+            brk: UnsafeCell::new(BRK_BOTTOM),
         }
     }
 
@@ -145,9 +149,9 @@ impl Drop for TaskExt {
     fn drop(&mut self) {
         // TODO: 将所有子进程的父进程设置为1
         unsafe {
-            FD_TABLE.deref_from(&self.ns);
-            CURRENT_DIR.deref_from(&self.ns);
-            CURRENT_DIR_PATH.deref_from(&self.ns);
+            FD_TABLE.drop_from(&self.ns);
+            CURRENT_DIR.drop_from(&self.ns);
+            CURRENT_DIR_PATH.drop_from(&self.ns);
         }
     }
 }

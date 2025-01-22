@@ -1,6 +1,6 @@
 use alloc::string::ToString;
 use arceos_posix_api as api;
-use core::ffi::c_void;
+use core::ffi::{c_char, c_void};
 
 use crate::syscall_body;
 use crate::syscall_imp::fs::c_type::{DirBuffer, DirEnt, FileType, Kstat, DIR_ENT_SIZE};
@@ -63,26 +63,27 @@ pub(crate) fn sys_getdents64(fd: i32, buf: *mut c_void, len: usize) -> i32 {
     })
 }
 
+/// Beacouse the FAT32 file system does not support the `link` system call,
+/// So we just return -1.
 pub(crate) fn sys_linkat(
-    old_dirfd: i32,
-    old_path: *const c_void,
-    new_dirfd: i32,
-    new_path: *const c_void,
+    _old_dirfd: i32,
+    _old_path: *const c_void,
+    _new_dirfd: i32,
+    _new_path: *const c_void,
     flags: i32,
 ) -> i32 {
     if flags != 0 {
         warn!("Unsupport flags: {}", flags);
     }
 
-    todo!("sys_linkat")
+    -1
 }
 
-pub(crate) fn sys_unlinkat(dirfd: i32, pathname: *const c_void, flags: i32) -> i32 {
+pub(crate) fn sys_unlinkat(dirfd: i32, pathname: *const c_char, flags: i32) -> i32 {
     if flags != 0 {
         warn!("Unsupport flags: {}", flags);
     }
-
-    todo!("sys_unlinkat")
+    api::sys_unlinkat(dirfd, pathname, flags)
 }
 
 pub(crate) fn sys_fstat(fd: i32, statbuf: *mut c_void) -> i32 {

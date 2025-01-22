@@ -1,21 +1,17 @@
 use crate::flag::WaitStatus;
-use crate::mm::{load_elf, load_user_app};
+use crate::mm::load_elf;
+use crate::syscall_body;
 use crate::task::{wait_pid, TaskExt};
-use crate::{mm, task, syscall_body};
 use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
 use arceos_posix_api::char_ptr_to_str;
-use axerrno::{AxError, AxResult};
+use axerrno::AxResult;
 use axhal::arch::UspaceContext;
-use axhal::paging::MappingFlags;
-use axmm::{kernel_page_table_root, AddrSpace};
-use axsync::Mutex;
-use axtask::{current, yield_now, TaskExtMut, TaskExtRef};
+use axtask::{current, TaskExtRef};
 use core::ffi::c_char;
-use memory_addr::VirtAddrRange;
 
 pub(crate) fn sys_clone(
     flags: usize,
