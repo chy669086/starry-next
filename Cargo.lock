@@ -1095,6 +1095,8 @@ dependencies = [
  "bitflags 2.6.0",
  "crate_interface",
  "kernel-elf-parser",
+ "lazy_static",
+ "lazyinit",
  "linkme",
  "log",
  "memory_addr",

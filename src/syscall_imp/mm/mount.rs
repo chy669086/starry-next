@@ -1,5 +1,6 @@
-use core::ffi::{c_char, c_void};
 use arceos_posix_api as api;
+use core::ffi::{c_char, c_void};
+
 pub(crate) fn sys_mount(
     source: *const c_char,
     target: *const c_char,

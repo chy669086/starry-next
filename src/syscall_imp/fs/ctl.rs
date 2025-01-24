@@ -63,7 +63,7 @@ pub(crate) fn sys_getdents64(fd: i32, buf: *mut c_void, len: usize) -> i32 {
     })
 }
 
-/// Beacouse the FAT32 file system does not support the `link` system call,
+/// Because the FAT32 file system does not support the `link` system call,
 /// So we just return -1.
 pub(crate) fn sys_linkat(
     _old_dirfd: i32,

@@ -30,6 +30,8 @@ axruntime = { git = "https://github.com/arceos-org/arceos.git", branch = "monoli
 arceos_posix_api = { git = "https://github.com/arceos-org/arceos.git", branch = "monolithic", features = ["fs", "multitask", "pipe", "thread-local"] }
 axfs = { path = "./.arceos/modules/axfs", features = ["thread-local"] }
 axns = { path = "./.arceos/modules/axns", features = ["thread-local"] }
+lazyinit = "0.2"
+lazy_static = "1.5.0"
 
 [target.'cfg(target_arch = "x86_64")'.dependencies]
 x86 = "0.52"

@@ -16,6 +16,7 @@ mod loader;
 mod mm;
 mod syscall_imp;
 mod task;
+mod process;
 
 use alloc::sync::Arc;
 

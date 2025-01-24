@@ -1,7 +1,8 @@
+use core::sync::atomic::Ordering;
 use arceos_posix_api::{self as api};
 use axtask::{current, TaskExtRef};
 use num_enum::TryFromPrimitive;
-
+use crate::process::get_process;
 use crate::syscall_body;
 
 /// ARCH_PRCTL codes
@@ -26,12 +27,17 @@ enum ArchPrctlCode {
 }
 
 pub(crate) fn sys_getpid() -> i32 {
-    api::sys_getpid()
+    let curr = current();
+    let proc = curr.task_ext().get_proc();
+    let pid = proc.map(|p| p.pid);
+    pid.unwrap_or(0) as i32
 }
 
 pub(crate) fn sys_getppid() -> i32 {
     let curr = current();
-    curr.task_ext().ppid as i32
+    let proc = curr.task_ext().get_proc();
+    let ppid = proc.map(|p| p.ppid.load(Ordering::Relaxed));
+    ppid.unwrap_or(1) as i32
 }
 
 pub(crate) fn sys_exit(status: i32) -> ! {
@@ -44,6 +50,14 @@ pub(crate) fn sys_exit(status: i32) -> ! {
             *(clear_child_tid) = 0;
         }
         // TODO: wake up threads, which are blocked by futex, and waiting for the address pointed by clear_child_tid
+    }
+    match curr.task_ext().get_proc() {
+        Some(proc) => {
+            proc.exit_thread(curr.as_task_ref().clone(), status);
+        }
+        None => {
+            warn!("No process found for the current task");
+        }
     }
     axtask::exit(status);
 }

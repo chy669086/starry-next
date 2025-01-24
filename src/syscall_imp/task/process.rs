@@ -1,7 +1,8 @@
 use crate::flag::WaitStatus;
 use crate::mm::load_elf;
+use crate::process::wait_pid;
 use crate::syscall_body;
-use crate::task::{wait_pid, TaskExt};
+use crate::task::TaskExt;
 use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::sync::Arc;
@@ -34,7 +35,9 @@ pub(crate) fn sys_clone(
 
         if let Ok(new_task_id) = curr_task
             .task_ext()
-            .clone_task(flags, stack, ptid, tls, child_tid)
+            .get_proc()
+            .unwrap()
+            .clone_proc(flags, stack, ptid, tls, child_tid)
         {
             Ok(new_task_id as isize)
         } else {
