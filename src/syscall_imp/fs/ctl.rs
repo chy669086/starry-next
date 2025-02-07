@@ -99,3 +99,7 @@ pub(crate) fn sys_fstat(fd: i32, statbuf: *mut c_void) -> i32 {
     }
     0
 }
+
+pub(crate) fn sys_lseek(fd: i32, offset: i64, whence: i32) -> i64 {
+    api::sys_lseek(fd, offset, whence)
+}

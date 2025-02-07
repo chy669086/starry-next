@@ -66,7 +66,7 @@ pub fn get_process(pid: u64) -> Option<AxProcessRef> {
 
 pub(crate) fn wait_pid(pid: i32, exit_code_ptr: *mut i32, _option: u32) -> Result<u64, WaitStatus> {
     if pid <= 0 {
-        return wait_pid_nagative(pid, exit_code_ptr, _option);
+        return wait_pid_negative(pid, exit_code_ptr, _option);
     }
 
     let curr_task = current();
@@ -106,7 +106,7 @@ pub(crate) fn wait_pid(pid: i32, exit_code_ptr: *mut i32, _option: u32) -> Resul
     Err(proc_status)
 }
 
-fn wait_pid_nagative(pid: i32, exit_code_ptr: *mut i32, _option: u32) -> Result<u64, WaitStatus> {
+fn wait_pid_negative(pid: i32, exit_code_ptr: *mut i32, _option: u32) -> Result<u64, WaitStatus> {
     assert!(pid <= 0);
 
     if pid == 0 {

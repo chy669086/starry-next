@@ -1,16 +1,16 @@
 mod api;
 
+use crate::flag::{CloneFlags, WaitStatus};
+use crate::task::{read_trap_frame_from_kstack, TaskExt};
 use alloc::string::String;
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 use axerrno::AxResult;
+use axhal::arch::UspaceContext;
 use axmm::AddrSpace;
 use axsync::Mutex;
 use axtask::{current, yield_now, AxTaskRef, TaskExtRef, TaskInner};
 use core::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, Ordering};
-use axhal::arch::UspaceContext;
-use crate::flag::{CloneFlags, WaitStatus};
-use crate::task::{read_trap_frame_from_kstack, TaskExt};
 
 pub use api::*;
 pub type AxProcessRef = Arc<Process>;
@@ -149,7 +149,10 @@ impl Process {
         let proc = new_process(self.pid, new_task_ref.clone());
         let pid = proc.pid;
         self.children.lock().push(proc.clone());
-        new_task_ref.task_ext().proc.init_once(Arc::downgrade(&proc));
+        new_task_ref
+            .task_ext()
+            .proc
+            .init_once(Arc::downgrade(&proc));
 
         Ok(pid)
     }

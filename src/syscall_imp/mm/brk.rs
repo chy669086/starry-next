@@ -1,6 +1,6 @@
-use core::sync::atomic::Ordering::SeqCst;
 use axhal::paging::MappingFlags;
 use axtask::{current, TaskExtRef};
+use core::sync::atomic::Ordering::SeqCst;
 use memory_addr::{MemoryAddr, VirtAddr};
 
 pub(crate) fn sys_brk(addr: *mut u8) -> isize {

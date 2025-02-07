@@ -1,9 +1,9 @@
-use core::sync::atomic::Ordering;
-use arceos_posix_api::{self as api};
-use axtask::{current, TaskExtRef};
-use num_enum::TryFromPrimitive;
 use crate::process::get_process;
 use crate::syscall_body;
+use arceos_posix_api::{self as api};
+use axtask::{current, TaskExtRef};
+use core::sync::atomic::Ordering;
+use num_enum::TryFromPrimitive;
 
 /// ARCH_PRCTL codes
 ///

@@ -108,7 +108,7 @@ pub(crate) fn sys_mmap(
                 .sub(start_addr.align_down_4k().as_usize())
                 .as_usize(),
             permission_flags.into(),
-            true,
+            populate,
         )?;
 
         drop(aspace);

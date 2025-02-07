@@ -1,4 +1,5 @@
 use crate::flag::{CloneFlags, WaitStatus};
+use crate::process::{new_process, AxProcessRef, Process};
 use alloc::string::String;
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
@@ -12,7 +13,6 @@ use axsync::Mutex;
 use axtask::{current, AxTaskRef, TaskExtRef, TaskInner};
 use core::cell::UnsafeCell;
 use core::sync::atomic::AtomicU64;
-use crate::process::{new_process, AxProcessRef, Process};
 
 /// Task extended data for the monolithic kernel.
 pub struct TaskExt {
@@ -31,7 +31,6 @@ pub struct TaskExt {
     /// The resource namespace.
     pub ns: AxNamespace,
 }
-
 
 impl TaskExt {
     pub fn new(uctx: UspaceContext, aspace: Arc<Mutex<AddrSpace>>) -> Self {
