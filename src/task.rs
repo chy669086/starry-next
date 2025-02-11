@@ -146,3 +146,11 @@ pub fn read_trap_frame_from_kstack(kstack_top: usize) -> TrapFrame {
     let trap_frame_addr = kstack_top - trap_frame_size;
     unsafe { *(trap_frame_addr as *const TrapFrame) }
 }
+
+pub fn write_trap_frame_to_kstack(kstack_top: usize, trap_frame: TrapFrame) {
+    let trap_frame_size = core::mem::size_of::<TrapFrame>();
+    let trap_frame_addr = kstack_top - trap_frame_size;
+    unsafe {
+        (trap_frame_addr as *mut TrapFrame).write(trap_frame);
+    }
+}

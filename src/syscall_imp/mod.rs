@@ -3,19 +3,24 @@ mod mm;
 mod sys;
 mod task;
 mod time;
+mod signal;
+mod ctypes;
+
+pub use ctypes::*;
 
 use self::fs::*;
 use self::mm::*;
 use self::sys::*;
 use self::task::*;
 use self::time::*;
+use self::signal::*;
 use axerrno::LinuxError;
 use axhal::{
     arch::TrapFrame,
     trap::{register_trap_handler, SYSCALL},
 };
 use syscalls::Sysno;
-
+pub(crate) use self::task::sys_exit;
 /// Macro to generate syscall body
 ///
 /// It will receive a function which return Result<_, LinuxError> and convert it to
@@ -115,9 +120,15 @@ fn handle_syscall(tf: &TrapFrame, syscall_num: usize) -> isize {
             tf.arg4() as _,
         ) as _,
         Sysno::umount2 => sys_umount(tf.arg0() as _) as _,
+        Sysno::rt_sigprocmask => sys_sigprocmask(
+            tf.arg0() as _,
+            tf.arg1() as _,
+            tf.arg2() as _,
+            tf.arg3() as _,
+        ) as _,
         _ => {
             warn!("Unimplemented syscall: {}", syscall_num);
-            axtask::exit(LinuxError::ENOSYS as _)
+            sys_exit(LinuxError::ENOSYS as _)
         }
     }
 }

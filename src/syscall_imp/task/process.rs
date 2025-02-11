@@ -61,29 +61,39 @@ pub(crate) fn sys_wait4(pid: i32, exit_code_ptr: *mut i32, _option: u32) -> usiz
     })
 }
 
+/// execve 系统调用
 pub(crate) fn sys_execve(
     file_name: *const c_char,
     argv: *const *const c_char,
     envp: *const *const c_char,
 ) -> isize {
     let curr = current();
-    let mut aspace = curr.task_ext().aspace.lock();
-    if Arc::strong_count(&curr.task_ext().aspace) != 1 {
-        warn!("execve: aspace is shared, not supported yet!");
-        return -1;
+    {
+        let proc = curr.task_ext().get_proc().unwrap();
+        if proc.threads.lock().len() > 1 {
+            warn!("execve: now only support single-threaded process");
+            return -1;
+        }
     }
+    let mut aspace = curr.task_ext().aspace.lock();
+
     let Ok(path) = char_ptr_to_str(file_name) else {
         return -1;
     };
 
+    // Copy the path, argv, and envp from user space to kernel space
     let path = String::from(path);
     let argv = unsafe { copy_from_ptr(argv) };
     let envp = unsafe { copy_from_ptr(envp) };
 
+    // Clear the address space
     aspace.clear();
 
+    // Load the ELF file
     let (entry_vaddr, ustack_top) = load_elf(&path, &mut aspace).unwrap();
 
+    // 可能造成了 UB
+    // TODO: 不使用裸指针
     let task_ext = unsafe { &mut *(curr.task_ext_ptr() as *mut TaskExt) };
     task_ext.uctx = UspaceContext::new(entry_vaddr.as_usize(), ustack_top, argv.len());
 
@@ -129,6 +139,7 @@ fn alloc_user_argv(argv: Vec<String>) -> AxResult<usize> {
     Ok(ptr.as_ptr() as usize)
 }
 
+/// Safety: ptr is a valid pointer to a null-terminated array of pointers to null-terminated strings
 unsafe fn copy_from_ptr(ptr: *const *const c_char) -> Vec<String> {
     let mut res = Vec::new();
     let mut i = 0;

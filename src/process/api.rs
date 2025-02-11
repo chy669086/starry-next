@@ -15,7 +15,7 @@ struct ProcessManagerInner {
 }
 
 lazy_static! {
-    static ref PROCESS_MANAGER: ProcessManager = ProcessManager::new();
+    static ref PID2PROC: ProcessManager = ProcessManager::new();
 }
 
 impl ProcessManagerInner {
@@ -50,17 +50,17 @@ impl ProcessManager {
 }
 
 pub fn remove_process(pid: u64) {
-    let mut inner = PROCESS_MANAGER.inner.lock();
+    let mut inner = PID2PROC.inner.lock();
     inner.remove_process(pid);
 }
 
 pub fn new_process(ppid: u64, task: AxTaskRef) -> AxProcessRef {
-    let mut inner = PROCESS_MANAGER.inner.lock();
+    let mut inner = PID2PROC.inner.lock();
     inner.new_process(ppid, task)
 }
 
 pub fn get_process(pid: u64) -> Option<AxProcessRef> {
-    let inner = PROCESS_MANAGER.inner.lock();
+    let inner = PID2PROC.inner.lock();
     inner.get_process(pid)
 }
 

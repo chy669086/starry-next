@@ -64,7 +64,7 @@ pub(crate) fn sys_exit(status: i32) -> ! {
 
 pub(crate) fn sys_exit_group(status: i32) -> ! {
     warn!("Temporarily replace sys_exit_group with sys_exit");
-    axtask::exit(status);
+    sys_exit(status);
 }
 
 /// To set the clear_child_tid field in the task extended data.

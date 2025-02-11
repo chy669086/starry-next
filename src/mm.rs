@@ -1,5 +1,7 @@
 use alloc::string::ToString;
 
+use crate::{config, loader};
+use arceos_posix_api::sys_exit;
 use axerrno::AxResult;
 use axhal::{
     paging::MappingFlags,
@@ -8,8 +10,6 @@ use axhal::{
 use axmm::AddrSpace;
 use axtask::TaskExtRef;
 use memory_addr::VirtAddr;
-
-use crate::{config, loader};
 
 /// Load a user app.
 ///
@@ -93,7 +93,7 @@ fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool)
                 axtask::current().id_name(),
                 vaddr
             );
-            axtask::exit(-1);
+            crate::syscall_imp::sys_exit(-1);
         }
         true
     } else {

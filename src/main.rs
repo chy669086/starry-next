@@ -11,6 +11,7 @@ extern crate axstd;
 mod config {
     include!(concat!(env!("OUT_DIR"), "/uspace_config.rs"));
 }
+pub mod signal;
 mod flag;
 mod loader;
 mod mm;
