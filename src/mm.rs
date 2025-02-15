@@ -1,7 +1,9 @@
-use alloc::string::ToString;
+use alloc::{
+    string::{String, ToString},
+    vec::Vec,
+};
 
 use crate::{config, loader};
-use arceos_posix_api::sys_exit;
 use axerrno::AxResult;
 use axhal::{
     paging::MappingFlags,
@@ -25,10 +27,15 @@ pub fn load_user_app(app_name: &str) -> AxResult<(VirtAddr, VirtAddr, AddrSpace)
 
     let (entry, ustack_pointer) = load_elf(app_name, &mut uspace)?;
 
-    Ok((entry, VirtAddr::from(ustack_pointer), uspace))
+    Ok((entry, ustack_pointer, uspace))
 }
 
-pub fn load_elf(app_name: &str, uspace: &mut AddrSpace) -> AxResult<(VirtAddr, VirtAddr)> {
+pub fn load_elf_with_arg(
+    app_name: &str,
+    uspace: &mut AddrSpace,
+    argv: &[String],
+    envp: &[String],
+) -> AxResult<(VirtAddr, VirtAddr)> {
     let elf_info = loader::load_elf(app_name, uspace.base());
     for segement in elf_info.segments {
         debug!(
@@ -61,8 +68,8 @@ pub fn load_elf(app_name: &str, uspace: &mut AddrSpace) -> AxResult<(VirtAddr, V
     );
     // FIXME: Add more arguments and environment variables
     let (stack_data, ustack_pointer) = kernel_elf_parser::get_app_stack_region(
-        &[app_name.to_string()],
-        &[],
+        argv,
+        envp,
         &elf_info.auxv,
         ustack_start,
         ustack_size,
@@ -79,24 +86,37 @@ pub fn load_elf(app_name: &str, uspace: &mut AddrSpace) -> AxResult<(VirtAddr, V
     Ok((elf_info.entry, VirtAddr::from_usize(ustack_pointer)))
 }
 
+pub fn load_elf(app_name: &str, uspace: &mut AddrSpace) -> AxResult<(VirtAddr, VirtAddr)> {
+    load_elf_with_arg(app_name, uspace, &[app_name.to_string()], &[])
+}
+
 #[register_trap_handler(PAGE_FAULT)]
 fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool) -> bool {
-    if is_user {
-        if !axtask::current()
-            .task_ext()
-            .aspace
-            .lock()
-            .handle_page_fault(vaddr, access_flags)
-        {
-            warn!(
-                "{}: segmentation fault at {:#x}, exit!",
-                axtask::current().id_name(),
-                vaddr
-            );
-            crate::syscall_imp::sys_exit(-1);
-        }
-        true
-    } else {
-        false
+    if !is_user {
+        warn!(
+            "Kernel page fault at {:#x}, access_flags: {:#x?}",
+            vaddr, access_flags
+        );
     }
+    let task = axtask::current();
+    if unsafe { task.task_ext_ptr().is_null() } {
+        error!("No task extended data found for the current task");
+        return false;
+    }
+    if !task
+        .task_ext()
+        .get_proc()
+        .unwrap()
+        .aspace
+        .lock()
+        .handle_page_fault(vaddr, access_flags)
+    {
+        warn!(
+            "{}: segmentation fault at {:#x}, exit!",
+            axtask::current().id_name(),
+            vaddr
+        );
+        crate::syscall_imp::sys_exit(-1);
+    }
+    true
 }

@@ -9,3 +9,4 @@ apps/*/build/
 apps/**/Cargo.lock
 testsuits-for-oskernel
 testcase_list
+.idea

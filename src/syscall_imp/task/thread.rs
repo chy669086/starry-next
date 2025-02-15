@@ -1,6 +1,5 @@
-use crate::process::get_process;
-use crate::syscall_body;
-use arceos_posix_api::{self as api};
+use crate::{signal::info, syscall_body};
+use alloc::sync::Arc;
 use axtask::{current, TaskExtRef};
 use core::sync::atomic::Ordering;
 use num_enum::TryFromPrimitive;
@@ -30,7 +29,7 @@ pub(crate) fn sys_getpid() -> i32 {
     let curr = current();
     let proc = curr.task_ext().get_proc();
     let pid = proc.map(|p| p.pid);
-    pid.unwrap_or(0) as i32
+    pid.unwrap_or(1) as i32
 }
 
 pub(crate) fn sys_getppid() -> i32 {

@@ -1,15 +1,11 @@
-use crate::flag::WaitStatus;
-use crate::mm::load_elf;
+use crate::mm::load_elf_with_arg;
 use crate::process::wait_pid;
 use crate::syscall_body;
 use crate::task::TaskExt;
-use alloc::boxed::Box;
+use crate::{flag::WaitStatus, task::write_trap_frame_to_kstack};
 use alloc::string::String;
-use alloc::sync::Arc;
-use alloc::vec;
 use alloc::vec::Vec;
 use arceos_posix_api::char_ptr_to_str;
-use axerrno::AxResult;
 use axhal::arch::UspaceContext;
 use axtask::{current, TaskExtRef};
 use core::ffi::c_char;
@@ -18,13 +14,10 @@ pub(crate) fn sys_clone(
     flags: usize,
     user_stack: usize,
     ptid: usize,
-    arg3: usize,
-    arg4: usize,
+    tls: usize,
+    child_tid: usize,
 ) -> isize {
     syscall_body!(sys_clone, {
-        let tls = arg3;
-        let child_tid = arg4;
-
         let stack = if user_stack == 0 {
             None
         } else {
@@ -68,14 +61,11 @@ pub(crate) fn sys_execve(
     envp: *const *const c_char,
 ) -> isize {
     let curr = current();
-    {
-        let proc = curr.task_ext().get_proc().unwrap();
-        if proc.threads.lock().len() > 1 {
-            warn!("execve: now only support single-threaded process");
-            return -1;
-        }
+    let proc = curr.task_ext().get_proc().unwrap();
+    if proc.threads.lock().len() > 1 {
+        warn!("execve: now only support single-threaded process");
+        return -1;
     }
-    let mut aspace = curr.task_ext().aspace.lock();
 
     let Ok(path) = char_ptr_to_str(file_name) else {
         return -1;
@@ -86,21 +76,24 @@ pub(crate) fn sys_execve(
     let argv = unsafe { copy_from_ptr(argv) };
     let envp = unsafe { copy_from_ptr(envp) };
 
+    let mut aspace = proc.aspace.lock();
+
     // Clear the address space
     aspace.clear();
 
     // Load the ELF file
-    let (entry_vaddr, ustack_top) = load_elf(&path, &mut aspace).unwrap();
+    let Ok((entry_vaddr, ustack_top)) = load_elf_with_arg(&path, &mut aspace, &argv, &envp) else {
+        return -1;
+    };
 
     // 可能造成了 UB
     // TODO: 不使用裸指针
     let task_ext = unsafe { &mut *(curr.task_ext_ptr() as *mut TaskExt) };
     task_ext.uctx = UspaceContext::new(entry_vaddr.as_usize(), ustack_top, argv.len());
 
-    let argv_ptr = alloc_user_argv(argv).unwrap();
-    let envp_ptr = alloc_user_argv(envp).unwrap();
-
-    task_ext.uctx.set_arg(argv_ptr, envp_ptr);
+    // Write the trap frame to the kernel stack
+    let trap_frame = task_ext.uctx.get_inner();
+    write_trap_frame_to_kstack(curr.kernel_stack_top().unwrap().as_usize(), trap_frame);
 
     drop(aspace);
 
@@ -121,22 +114,6 @@ pub(crate) fn sys_execve(
     unsafe {
         task_ext.uctx.enter_uspace(kstack_top);
     }
-}
-
-fn alloc_user_argv(argv: Vec<String>) -> AxResult<usize> {
-    let argv = Box::leak(argv.into_boxed_slice());
-
-    let argv_ptr = argv
-        .iter()
-        .map(|s| s.as_ptr() as usize)
-        .chain(vec![0].into_iter())
-        .collect::<Vec<_>>();
-
-    let argv_ptr = argv_ptr.into_boxed_slice();
-
-    let ptr = Box::leak(argv_ptr);
-
-    Ok(ptr.as_ptr() as usize)
 }
 
 /// Safety: ptr is a valid pointer to a null-terminated array of pointers to null-terminated strings

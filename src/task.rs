@@ -1,23 +1,18 @@
-use crate::flag::{CloneFlags, WaitStatus};
 use crate::process::{new_process, AxProcessRef, Process};
-use alloc::string::String;
 use alloc::sync::{Arc, Weak};
-use alloc::vec::Vec;
 use arceos_posix_api::FD_TABLE;
-use axerrno::AxResult;
 use axfs::{CURRENT_DIR, CURRENT_DIR_PATH};
 use axhal::arch::{TrapFrame, UspaceContext};
 use axmm::AddrSpace;
 use axns::{AxNamespace, AxNamespaceIf};
 use axsync::Mutex;
-use axtask::{current, AxTaskRef, TaskExtRef, TaskInner};
-use core::cell::UnsafeCell;
+use axtask::{AxTaskRef, TaskExtRef, TaskInner};
 use core::sync::atomic::AtomicU64;
 
 /// Task extended data for the monolithic kernel.
 pub struct TaskExt {
     /// 所属进程
-    pub proc: lazyinit::LazyInit<Weak<Process>>,
+    pub proc: Weak<Process>,
     /// The clear thread tid field
     ///
     /// See <https://manpages.debian.org/unstable/manpages-dev/set_tid_address.2.en.html#clear_child_tid>
@@ -26,19 +21,16 @@ pub struct TaskExt {
     clear_child_tid: AtomicU64,
     /// The user space context.
     pub uctx: UspaceContext,
-    /// The virtual memory address space.
-    pub aspace: Arc<Mutex<AddrSpace>>,
     /// The resource namespace.
     pub ns: AxNamespace,
 }
 
 impl TaskExt {
-    pub fn new(uctx: UspaceContext, aspace: Arc<Mutex<AddrSpace>>) -> Self {
+    pub fn new(uctx: UspaceContext, proc: &AxProcessRef) -> Self {
         let ext = Self {
-            proc: lazyinit::LazyInit::new(),
+            proc: Arc::downgrade(proc),
             uctx,
             clear_child_tid: AtomicU64::new(0),
-            aspace,
             ns: AxNamespace::new_thread_local(),
         };
         ext.init_ns_space();
@@ -46,7 +38,7 @@ impl TaskExt {
     }
 
     pub fn get_proc(&self) -> Option<AxProcessRef> {
-        self.proc.get().and_then(|p| p.upgrade())
+        self.proc.upgrade()
     }
 
     /// This function is used to initialize the namespace space.
@@ -129,14 +121,17 @@ pub fn spawn_user_task(aspace: Arc<Mutex<AddrSpace>>, uctx: UspaceContext) -> Ax
         "userboot".into(),
         crate::config::KERNEL_STACK_SIZE,
     );
+    let pid = task.id().as_u64();
+    let proc = new_process(1, pid, aspace.clone());
+
     task.ctx_mut()
         .set_page_table_root(aspace.lock().page_table_root());
-    task.init_task_ext(TaskExt::new(uctx, aspace));
+    task.init_task_ext(TaskExt::new(uctx, &proc));
     task.task_ext().init_ns();
 
     let task = axtask::spawn_task(task);
-    let proc = new_process(1, task.clone());
-    task.task_ext().proc.init_once(Arc::downgrade(&proc));
+
+    proc.set_main_thread(task.clone());
 
     task
 }

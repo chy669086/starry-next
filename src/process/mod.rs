@@ -1,12 +1,12 @@
 mod api;
 pub mod signal;
 
-use crate::flag::{CloneFlags, WaitStatus};
+use crate::flag::CloneFlags;
 use crate::process::signal::SignalModule;
 use crate::task::{read_trap_frame_from_kstack, TaskExt};
 use alloc::collections::BTreeMap;
 use alloc::string::String;
-use alloc::sync::{Arc, Weak};
+use alloc::sync::Arc;
 use alloc::vec::Vec;
 pub use api::*;
 use axerrno::AxResult;
@@ -29,7 +29,6 @@ pub struct Process {
     pub children: Mutex<Vec<AxProcessRef>>,
     /// 线程，tid -> thread
     pub threads: Mutex<BTreeMap<u64, AxTaskRef>>,
-    pub taskid2tid: Mutex<BTreeMap<u64, u64>>,
     /// 地址空间
     pub aspace: Arc<Mutex<AddrSpace>>,
     /// 退出码
@@ -40,8 +39,6 @@ pub struct Process {
     pub heap_top: AtomicU64,
     /// 当前堆顶
     pub heap_current: AtomicU64,
-    /// 线程编号
-    pub tid_counter: AtomicU64,
     /// 进程状态
     pub is_exited: AtomicBool,
     /// 信号处理
@@ -52,14 +49,7 @@ const BRK_BOTTOM: u64 = 0x40000000;
 const BRK_TOP: u64 = 0x80000000;
 
 impl Process {
-    pub fn from_task(task: AxTaskRef, ppid: u64) -> Self {
-        let process = Self::new(ppid, task.task_ext().aspace.clone());
-        process.set_main_thread(task);
-        process
-    }
-    pub fn new(ppid: u64, aspace: Arc<Mutex<AddrSpace>>) -> Self {
-        static PID_COUNTER: AtomicU64 = AtomicU64::new(2);
-        let pid = PID_COUNTER.fetch_add(1, Ordering::Relaxed);
+    pub fn new(ppid: u64, pid: u64, aspace: Arc<Mutex<AddrSpace>>) -> Self {
         Self {
             pid,
             ppid: AtomicU64::new(ppid),
@@ -70,10 +60,8 @@ impl Process {
             heap_bottom: AtomicU64::new(BRK_BOTTOM),
             heap_top: AtomicU64::new(BRK_TOP),
             heap_current: AtomicU64::new(BRK_BOTTOM),
-            tid_counter: AtomicU64::new(1),
             is_exited: AtomicBool::new(false),
             signal_module: Mutex::new(BTreeMap::new()),
-            taskid2tid: Mutex::new(BTreeMap::new()),
         }
     }
 
@@ -86,44 +74,31 @@ impl Process {
     }
 
     pub fn main_thread(&self) -> AxTaskRef {
-        self.threads.lock()[&1].clone()
-    }
-
-    fn next_tid(&self) -> u64 {
-        self.tid_counter.fetch_add(1, Ordering::Relaxed)
+        self.threads.lock()[&self.pid].clone()
     }
 
     pub fn set_main_thread(&self, thread: AxTaskRef) {
-        assert_eq!(self.tid_counter.load(Ordering::Relaxed), 1);
+        assert_eq!(thread.id().as_u64(), self.pid);
         self.add_thread(thread);
     }
 
-    pub fn get_tid_from_taskid(&self, taskid: u64) -> Option<u64> {
-        self.taskid2tid.lock().get(&taskid).cloned()
-    }
-
-    pub fn get_tid_from_task(&self, task: &AxTaskRef) -> Option<u64> {
-        self.get_tid_from_taskid(task.id().as_u64())
-    }
-
     pub fn add_thread(&self, thread: AxTaskRef) {
-        let tid = self.next_tid();
+        let tid = thread.id().as_u64();
         self.signal_module
             .lock()
             .insert(tid, SignalModule::new(None));
-        self.taskid2tid.lock().insert(thread.id().as_u64(), tid);
         self.threads.lock().insert(tid, thread);
     }
 
+    pub fn is_main_thread(&self, thread: &AxTaskRef) -> bool {
+        thread.id().as_u64() == self.pid
+    }
+
     pub fn exit_thread(&self, thread: AxTaskRef, status: i32) {
-        let tid = self
-            .taskid2tid
-            .lock()
-            .remove(&thread.id().as_u64())
-            .unwrap();
+        let tid = thread.id().as_u64();
         self.signal_module.lock().remove(&tid);
         // 主线程退出时，退出整个进程
-        if tid == 1 {
+        if self.is_main_thread(&thread) {
             self.exit(status);
             return;
         }
@@ -152,14 +127,19 @@ impl Process {
         debug!("Process {} exited with code {}", self.pid, code);
     }
 
-    pub fn alloc_range_lazy(&self, start: VirtAddr, end: VirtAddr) -> AxResult<()> {
+    pub fn alloc_range_lazy(
+        &self,
+        start: VirtAddr,
+        end: VirtAddr,
+        flags: MappingFlags,
+    ) -> AxResult<()> {
         if start > end {
             return Err(axerrno::AxError::InvalidInput);
         }
         let start = start.align_down_4k();
         let end = end.align_up_4k();
         let mut aspace = self.aspace.lock();
-        aspace.map_alloc(start, end - start, MappingFlags::all(), false)?;
+        aspace.map_alloc(start, end - start, flags, false)?;
         Ok(())
     }
 
@@ -167,27 +147,16 @@ impl Process {
         &self,
         flags: usize,
         stack: Option<usize>,
-        ptid: usize,
-        tls: usize,
+        _ptid: usize,
+        _tls: usize,
         ctid: usize,
     ) -> AxResult<u64> {
         let clone_flags = CloneFlags::from_bits((flags & !0x3f) as u32).unwrap();
 
-        let mut new_task = TaskInner::new(
-            || {
-                let curr = current();
-                let kstack_top = curr.kernel_stack_top().unwrap();
-                info!(
-                    "Enter user space: entry={:#x}, ustack={:#x}, kstack={:#x}",
-                    curr.task_ext().uctx.get_ip(),
-                    curr.task_ext().uctx.get_sp(),
-                    kstack_top,
-                );
-                unsafe { curr.task_ext().uctx.enter_uspace(kstack_top) };
-            },
-            String::from(current().id_name()),
-            crate::config::KERNEL_STACK_SIZE,
-        );
+        // 对于 CLONE_THREAD，特殊处理
+        if clone_flags.contains(CloneFlags::CLONE_THREAD) {
+            return self.clone_thread(flags, stack, _ptid, _tls, ctid);
+        }
 
         let curr = current();
         let mut trap_frame =
@@ -196,13 +165,31 @@ impl Process {
         let new_aspace = if clone_flags.contains(CloneFlags::CLONE_VM) {
             self.aspace.clone()
         } else {
-            let new_aspace = AddrSpace::from_exited_space(&self.aspace.lock())?;
-            Arc::new(Mutex::new(new_aspace))
+            // TODO: 现有的复制方式似乎会破坏原有进程的空间，需要进一步优化，现在用共享空间代替
+            // let new_aspace = AddrSpace::from_exited_space(&self.aspace.lock())?;
+            // Arc::new(Mutex::new(new_aspace))
+            self.aspace.clone()
         };
 
-        new_task
-            .ctx_mut()
-            .set_page_table_root(new_aspace.lock().page_table_root());
+        let mut new_task = new_task();
+
+        let pid = new_task.id().as_u64();
+        let proc = if clone_flags.contains(CloneFlags::CLONE_PARENT) {
+            // 共享父进程
+            let ppid = self.ppid.load(Ordering::Relaxed);
+            let proc = new_process(ppid, pid, new_aspace.clone());
+            // 将子进程加入父进程的子进程列表
+            // 由于现有进程模型的限制，系统进程不会被加入到进程管理器中
+            get_process(ppid).map(|p| p.children.lock().push(proc.clone()));
+            proc
+        } else {
+            let proc = new_process(self.pid, pid, new_aspace.clone());
+            self.children.lock().push(proc.clone());
+            proc
+        };
+
+        let page_root = new_aspace.lock().page_table_root();
+        new_task.ctx_mut().set_page_table_root(page_root);
 
         trap_frame.regs.a0 = 0;
         trap_frame.sepc += 4;
@@ -213,10 +200,10 @@ impl Process {
 
         let new_uctx = UspaceContext::from(&trap_frame);
 
-        let new_task_ext = TaskExt::new(new_uctx, new_aspace);
+        let new_task_ext = TaskExt::new(new_uctx, &proc);
 
         // 共享文件描述符
-        if clone_flags.contains(CloneFlags::CLONE_FS) {
+        if clone_flags.contains(CloneFlags::CLONE_FILES) {
             new_task_ext.init_fs_shared()
         }
 
@@ -227,16 +214,77 @@ impl Process {
         new_task_ext.init_ns();
         new_task.init_task_ext(new_task_ext);
 
-        // 设置父子进程关系
         let new_task_ref = axtask::spawn_task(new_task);
-        let proc = new_process(self.pid, new_task_ref.clone());
-        let pid = proc.pid;
-        self.children.lock().push(proc.clone());
-        new_task_ref
-            .task_ext()
-            .proc
-            .init_once(Arc::downgrade(&proc));
+        proc.set_main_thread(new_task_ref);
 
         Ok(pid)
     }
+
+    // 对于 CLONE_THREAD，特殊处理
+    pub fn clone_thread(
+        &self,
+        flags: usize,
+        stack: Option<usize>,
+        _ptid: usize,
+        _tls: usize,
+        ctid: usize,
+    ) -> AxResult<u64> {
+        let clone_flags = CloneFlags::from_bits((flags & !0x3f) as u32).unwrap();
+        assert!(clone_flags.contains(CloneFlags::CLONE_THREAD));
+
+        let mut new_task = new_task();
+
+        let curr_task = current();
+        let proc = curr_task.task_ext().get_proc().unwrap();
+
+        let mut trap_frame =
+            read_trap_frame_from_kstack(curr_task.kernel_stack_top().unwrap().as_usize());
+
+        trap_frame.regs.a0 = 0;
+        trap_frame.sepc += 4;
+
+        if let Some(stack) = stack {
+            trap_frame.regs.sp = stack;
+        }
+
+        let new_uctx = UspaceContext::from(&trap_frame);
+        let new_task_ext = TaskExt::new(new_uctx, &proc);
+        new_task_ext.init_fs_shared();
+
+        if clone_flags.contains(CloneFlags::CLONE_CHILD_CLEARTID) {
+            new_task_ext.set_clear_child_tid(ctid as u64);
+        }
+
+        new_task_ext.init_ns();
+        new_task.init_task_ext(new_task_ext);
+
+        let new_task_ref = axtask::spawn_task(new_task);
+        proc.add_thread(new_task_ref);
+
+        Ok(proc.pid)
+    }
+}
+
+impl Drop for Process {
+    fn drop(&mut self) {
+        info!("Process {} dropped", self.pid);
+    }
+}
+
+fn new_task() -> TaskInner {
+    TaskInner::new(
+        || {
+            let curr = current();
+            let kstack_top = curr.kernel_stack_top().unwrap();
+            info!(
+                "Enter user space: entry={:#x}, ustack={:#x}, kstack={:#x}",
+                curr.task_ext().uctx.get_ip(),
+                curr.task_ext().uctx.get_sp(),
+                kstack_top,
+            );
+            unsafe { curr.task_ext().uctx.enter_uspace(kstack_top) };
+        },
+        String::from(current().id_name()),
+        crate::config::KERNEL_STACK_SIZE,
+    )
 }

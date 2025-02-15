@@ -1,7 +1,7 @@
-use axtask::{current, TaskExtRef};
 use crate::process::signal::send_signal_to_proc;
 use crate::syscall_body;
 use crate::syscall_imp::{SigMaskFlag, SIGSET_SIZE_IN_BYTE};
+use axtask::{current, TaskExtRef};
 
 pub fn sys_sigprocmask(
     flag: usize,
@@ -9,7 +9,10 @@ pub fn sys_sigprocmask(
     old_mask: *mut usize,
     sigsetsize: usize,
 ) -> isize {
-    debug!("sys_sigprocmask({}, {:p}, {:p}, {})", flag, new_mask, old_mask, sigsetsize);
+    debug!(
+        "sys_sigprocmask <= {}, {:p}, {:p}, {}",
+        flag, new_mask, old_mask, sigsetsize
+    );
     syscall_body!(sys_sigprocmask, {
         let flag = SigMaskFlag::from(flag);
         if sigsetsize != SIGSET_SIZE_IN_BYTE {
@@ -20,9 +23,7 @@ pub fn sys_sigprocmask(
         let proc = task.task_ext().get_proc().unwrap();
 
         let mut sig_modules = proc.signal_module.lock();
-        let sig_module = sig_modules
-            .get_mut(&proc.get_tid_from_task(&task.as_task_ref()).unwrap())
-            .unwrap();
+        let sig_module = sig_modules.get_mut(&task.id().as_u64()).unwrap();
         if old_mask as usize != 0 {
             unsafe {
                 *old_mask = sig_module.sig_set.mask;
@@ -51,10 +52,10 @@ pub fn sys_sigprocmask(
 pub(crate) fn sys_kill(pid: isize, signum: isize) -> isize {
     debug!("sys_kill <= {}, {}", pid, signum);
     syscall_body!(sys_kill, {
-        if pid > 1 && signum > 0 {
+        if pid > 0 && signum > 0 {
             let _ = send_signal_to_proc(pid as u64, signum, None);
             Ok(0)
-        } else if pid == 1 {
+        } else if pid == 0 {
             Err(axerrno::LinuxError::ESRCH)
         } else {
             Err(axerrno::LinuxError::EINVAL)

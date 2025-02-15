@@ -2,8 +2,9 @@ use crate::flag::WaitStatus;
 use crate::process::{AxProcessRef, Process};
 use alloc::collections::BTreeMap;
 use alloc::sync::Arc;
+use axmm::AddrSpace;
 use axsync::Mutex;
-use axtask::{current, AxTaskRef, TaskExtRef};
+use axtask::{current, TaskExtRef};
 use lazy_static::lazy_static;
 
 struct ProcessManager {
@@ -25,8 +26,8 @@ impl ProcessManagerInner {
         }
     }
 
-    fn new_process(&mut self, ppid: u64, task: AxTaskRef) -> AxProcessRef {
-        let process = Arc::new(Process::from_task(task, ppid));
+    fn new_process(&mut self, ppid: u64, pid: u64, aspace: Arc<Mutex<AddrSpace>>) -> AxProcessRef {
+        let process = Arc::new(Process::new(ppid, pid, aspace));
         let pid = process.pid;
         self.processes.insert(pid, process.clone());
         process
@@ -54,14 +55,20 @@ pub fn remove_process(pid: u64) {
     inner.remove_process(pid);
 }
 
-pub fn new_process(ppid: u64, task: AxTaskRef) -> AxProcessRef {
+pub fn new_process(ppid: u64, pid: u64, aspace: Arc<Mutex<AddrSpace>>) -> AxProcessRef {
     let mut inner = PID2PROC.inner.lock();
-    inner.new_process(ppid, task)
+    inner.new_process(ppid, pid, aspace)
 }
 
 pub fn get_process(pid: u64) -> Option<AxProcessRef> {
     let inner = PID2PROC.inner.lock();
     inner.get_process(pid)
+}
+
+pub fn current_process() -> Option<AxProcessRef> {
+    let curr_task = current();
+    let proc = curr_task.task_ext().get_proc();
+    proc
 }
 
 pub(crate) fn wait_pid(pid: i32, exit_code_ptr: *mut i32, _option: u32) -> Result<u64, WaitStatus> {

@@ -1,4 +1,4 @@
-use crate::syscall_body;
+use crate::{process::current_process, syscall_body};
 use axerrno::LinuxError;
 use axhal::paging::MappingFlags;
 use axtask::{current, TaskExtRef};
@@ -69,9 +69,8 @@ pub(crate) fn sys_mmap(
         addr as usize, length, prot, flags, fd, offset
     );
     syscall_body!(sys_mmap, {
-        let curr = current();
-        let curr_ext = curr.task_ext();
-        let mut aspace = curr_ext.aspace.lock();
+        let proc = current_process().unwrap();
+        let mut aspace = proc.aspace.lock();
         let permission_flags = MmapProt::from_bits_truncate(prot);
         // TODO: check illegal flags for mmap
         // An example is the flags contained none of MAP_PRIVATE, MAP_SHARED, or MAP_SHARED_VALIDATE.
@@ -134,8 +133,8 @@ pub(crate) fn sys_mmap(
 pub(crate) fn sys_munmap(addr: *mut usize, mut length: usize) -> i32 {
     syscall_body!(sys_munmap, {
         let curr = current();
-        let curr_ext = curr.task_ext();
-        let mut aspace = curr_ext.aspace.lock();
+        let proc = curr.task_ext().get_proc().unwrap();
+        let mut aspace = proc.aspace.lock();
         length = memory_addr::align_up_4k(length);
         let start_addr = VirtAddr::from(addr as usize);
         aspace.unmap(start_addr, length)?;

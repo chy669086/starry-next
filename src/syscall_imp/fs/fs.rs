@@ -1,12 +1,6 @@
-use crate::syscall_body;
-use alloc::format;
-use alloc::string::ToString;
 use arceos_posix_api as api;
 use arceos_posix_api::ctypes::{mode_t, size_t, timespec};
-use arceos_posix_api::FD_TABLE;
-use axerrno::LinuxError;
-use axtask::{current, TaskExtRef};
-use core::ffi::{c_char, c_int, CStr};
+use core::ffi::{c_char, c_int};
 
 pub(crate) fn sys_openat(dirfd: i32, path: *const c_char, flags: i32, modes: mode_t) -> isize {
     api::sys_openat(dirfd, path, flags, modes) as isize

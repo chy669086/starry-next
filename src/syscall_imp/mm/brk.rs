@@ -18,7 +18,7 @@ pub(crate) fn sys_brk(addr: *mut u8) -> isize {
     if addr < bottom {
         return -1;
     }
-    let mut aspace = curr.task_ext().aspace.lock();
+    let mut aspace = proc.aspace.lock();
 
     // 如果 addr 小于 brk，则释放 addr 到 brk 之间的内存
     if addr < brk {
@@ -34,12 +34,8 @@ pub(crate) fn sys_brk(addr: *mut u8) -> isize {
         let start_addr = VirtAddr::from(brk).align_up_4k();
         let end_addr = VirtAddr::from(addr).align_up_4k();
         let permission = MappingFlags::all();
-        match aspace.map_alloc(
-            start_addr,
-            end_addr.sub(start_addr.as_usize()).as_usize(),
-            permission,
-            true,
-        ) {
+
+        match proc.alloc_range_lazy(start_addr, end_addr, permission) {
             Ok(_) | Err(axerrno::AxError::InvalidInput) => {}
             Err(_) => return -1,
         }

@@ -1,4 +1,3 @@
-use crate::main;
 use crate::process::get_process;
 use crate::signal::action::{SigActionFlags, SignalDefault, SIG_DFL, SIG_IGN};
 use crate::signal::info::SigInfo;
@@ -72,9 +71,7 @@ pub fn load_trap_for_signal() -> bool {
     };
 
     let mut sig_modules = proc.signal_module.lock();
-    let sig_module = sig_modules
-        .get_mut(&proc.get_tid_from_taskid(task.id().as_u64()).unwrap())
-        .unwrap();
+    let sig_module = sig_modules.get_mut(&task.id().as_u64()).unwrap();
     if let Some(old_trap_frame) = sig_module.last_trap_frame {
         let mut now_trap_frame =
             read_trap_frame_from_kstack(task.kernel_stack_top().unwrap().as_usize());
@@ -90,23 +87,23 @@ pub fn load_trap_for_signal() -> bool {
         false
     }
 }
+
 #[distributed_slice(axhal::arch::HANDLE_SIGNAL)]
 pub fn handle_signals() {
     let task = current();
-    let Some(proc) = task.task_ext().get_proc() else {
-        // 只有系统进程才会没有 proc
+    if unsafe { task.task_ext_ptr().is_null() } {
+        // 只有系统进程才会没有 task_ext_ptr
         // 系统进程不会收到信号，所以不需要处理
         return;
-    };
+    }
+    let proc = task.task_ext().get_proc().unwrap();
     if proc.is_exited.load(Ordering::Relaxed) {
         // 进程已经退出，不再处理信号
         sys_exit(0);
     }
     let mut sig_modules = proc.signal_module.lock();
 
-    let sig_module = sig_modules
-        .get_mut(&proc.get_tid_from_task(task.as_task_ref()).unwrap())
-        .unwrap();
+    let sig_module = sig_modules.get_mut(&task.id().as_u64()).unwrap();
     let sig_set = &mut sig_module.sig_set;
     let sig_num = if let Some(sig_num) = sig_set.get_one_sig() {
         sig_num
@@ -200,7 +197,7 @@ pub fn handle_signals() {
             - core::mem::size_of::<SignalUserContext>())
             & !0xf;
 
-        proc.alloc_range_lazy(sp_base.into(), sp.into())
+        proc.alloc_range_lazy(sp_base.into(), sp.into(), MappingFlags::all())
             .expect("failed to alloc signal stack");
 
         sp = (sp - core::mem::size_of::<SigInfo>()) & !0xf;
@@ -247,7 +244,7 @@ fn terminate_process(signal: SignalNo, info: Option<SigInfo>) {
     let task = current();
     let proc = task.task_ext().get_proc().unwrap();
     warn!("Terminate process: {}", proc.pid);
-    if proc.get_tid_from_task(task.as_task_ref()).unwrap() == 1 {
+    if proc.is_main_thread(task.as_task_ref()) {
         sys_exit(signal as i32)
     } else {
         send_signal_to_proc(proc.pid, signal as isize, info).unwrap();
@@ -261,9 +258,7 @@ pub fn send_signal_to_proc(pid: u64, signal: isize, info: Option<SigInfo>) -> Ax
     };
     let main_thread = proc.main_thread();
     let mut sig_modules = proc.signal_module.lock();
-    let sig_module = sig_modules
-        .get_mut(&proc.get_tid_from_task(&main_thread).unwrap())
-        .unwrap();
+    let sig_module = sig_modules.get_mut(&main_thread.id().as_u64()).unwrap();
     sig_module.sig_set.try_add_sig(signal as usize, info);
     // TODO: 如果主线程休眠，则唤醒处理信号
     Ok(())
